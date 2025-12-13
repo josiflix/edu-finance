@@ -1,404 +1,432 @@
-// EduFinance Pocket - Frontend (GitHub Pages)
-// Lecturas por JSONP (sin CORS). Escrituras por POST no-cors.
+/**
+ * EduFinance Pocket Backend (Google Apps Script)
+ *
+ * Required sheets:
+ * - Movimientos (row 1 headers):
+ *   id, date, accounting_month, type, raw_category, amount, note, created_at
+ * - Mapa_Categorias (row 1 headers):
+ *   RawCategory, StdCategory, Bucket, Active?
+ * - Settings (row 1 headers):
+ *   Key, Value
+ * - Presupuestos (optional) (row 1 headers):
+ *   Bucket, MonthlyLimit
+ */
 
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbweCsVUuyqqype4eMXb23DXV8-dwo2AJdLfeGw0ZfBFMiy5Etisp_L30r1lMn4SpqAv/exec";
-const API_KEY     = "1234567890111213141516171819202122232425";
+// === CONFIG ===
+const SPREADSHEET_ID = "https://script.google.com/macros/s/AKfycbzUBx0P-TJUJ0ND6R6OMOI9zZEDWKJVefsCDlku2TGkJSc4srDrS8MR_joZLCxyU5EG/exec";
+const API_KEY = "1234567890111213141516171819202122232425";
 
-const $ = (id) => document.getElementById(id);
-const fmtEUR = (n) => (Number(n)||0).toLocaleString("es-ES",{style:"currency",currency:"EUR"});
-const todayISO = () => new Date().toISOString().slice(0,10);
-const monthOf = (isoDate) => String(isoDate || "").slice(0,7);
+// -------------------- ENTRY POINTS --------------------
 
-function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
-
-function setStatus(msg, kind=""){
-  const el = $("status");
-  if (!el) return;
-  el.textContent = msg;
-  el.className = "status " + kind;
-}
-
-function updateOfflineCount(){
-  const el = $("offlineCount");
-  if (!el) return;
-  el.textContent = String(getQueue().length);
-}
-
-// ---------- JSONP (READS) ----------
-function jsonp(path, params = {}){
-  return new Promise((resolve, reject) => {
-    const cbName = "__edf_cb_" + Math.random().toString(16).slice(2);
-    const qs = new URLSearchParams({
-  api_key: API_KEY,
-  path,
-  callback: cbName,
-  _ts: String(Date.now()), // <- anti-cache SI o SI
-  ...params,
-});
-
-
-    const script = document.createElement("script");
-    script.src = `${BACKEND_URL}?${qs.toString()}`;
-    script.async = true;
-
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error("Timeout JSONP"));
-    }, 15000);
-
-    function cleanup(){
-      clearTimeout(timer);
-      if (script.parentNode) script.parentNode.removeChild(script);
-      try { delete window[cbName]; } catch { window[cbName] = undefined; }
+function doGet(e) {
+  try {
+    const p = (e && e.parameter) ? e.parameter : {};
+    if (String(p.api_key || "") !== API_KEY) {
+      return jsonpOrJson_(p, { ok: false, error: "Unauthorized (API_KEY)" }, 401);
     }
 
-    window[cbName] = (data) => {
-      cleanup();
-      resolve(data);
-    };
+    const path = String(p.path || "").toLowerCase();
+    const month = String(p.month || "");
 
-    script.onerror = () => {
-      cleanup();
-      reject(new Error("JSONP load error"));
-    };
+    switch (path) {
+      case "/settings":
+        return jsonpOrJson_(p, { ok: true, settings: getSettings_() }, 200);
 
-    document.body.appendChild(script);
-  });
-}
+      case "/categories":
+        return jsonpOrJson_(p, { ok: true, categories: getCategories_() }, 200);
 
-// ---------- WRITES (POST no-cors) ----------
-async function postNoCors(payload){
-  // mode:no-cors => no podemos leer respuesta, pero la petición se envía.
-  await fetch(BACKEND_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ ...payload, api_key: API_KEY }),
-  });
-}
+      case "/budgets":
+        return jsonpOrJson_(p, { ok: true, budgets: getBudgets_() }, 200);
 
-// ---------- Offline queue ----------
-const OFFLINE_KEY = "eduf_offline_queue_v1";
+      case "/summary":
+        return jsonpOrJson_(p, { ok: true, summary: getSummary_(month) }, 200);
 
-function getQueue(){
-  try { return JSON.parse(localStorage.getItem(OFFLINE_KEY) || "[]"); }
-  catch { return []; }
-}
-function setQueue(q){
-  localStorage.setItem(OFFLINE_KEY, JSON.stringify(q || []));
-  updateOfflineCount();
-}
-function enqueue(item){
-  const q = getQueue();
-  q.push({ ...item, queued_at: Date.now() });
-  setQueue(q);
-}
-function clearQueue(){
-  setQueue([]);
-}
+      case "/movements":
+        return jsonpOrJson_(p, { ok: true, movements: getMovements_(month) }, 200);
 
-// ---------- State ----------
-let settings = {};
-let categories = [];
-let activeMonth = "";
-
-// ---------- Month logic ----------
-function calcAccountingMonth(dateISO){
-  const daySwitch = Number(settings?.contable_day_switch || 10);
-  const isContable = $("contableToggle")?.checked ?? false;
-  if (!isContable) return monthOf(dateISO);
-
-  const d = new Date(dateISO + "T00:00:00");
-  const day = d.getDate();
-  if (day >= daySwitch){
-    const nm = new Date(d.getFullYear(), d.getMonth()+1, 1);
-    return `${nm.getFullYear()}-${String(nm.getMonth()+1).padStart(2,"0")}`;
-  }
-  return monthOf(dateISO);
-}
-
-function buildMonthOptions(){
-  const sel = $("monthSelect");
-  if (!sel) return;
-
-  const now = new Date();
-  const months = [];
-  for (let d=-6; d<=12; d++){
-    const tmp = new Date(now.getFullYear(), now.getMonth()+d, 1);
-    months.push(`${tmp.getFullYear()}-${String(tmp.getMonth()+1).padStart(2,"0")}`);
-  }
-
-  sel.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join("");
-  const def = calcAccountingMonth(todayISO());
-  activeMonth = def;
-  sel.value = def;
-}
-
-function setDefaultDate(){
-  const dateEl = $("date");
-  if (dateEl) dateEl.value = todayISO();
-}
-
-// ---------- Render ----------
-function escapeHtml(s){
-  return String(s ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-
-function renderCategories(){
-  const sel = $("category");
-  if (!sel) return;
-  sel.innerHTML = `<option value="">Selecciona…</option>` +
-    categories.map(c => `<option value="${escapeHtml(c.raw)}">${escapeHtml(c.raw)}</option>`).join("");
-}
-
-function renderSummary(summary){
-  if ($("kpiIn")) $("kpiIn").textContent = fmtEUR(summary.ingresos);
-  if ($("kpiOut")) $("kpiOut").textContent = fmtEUR(summary.gastos);
-  if ($("kpiNet")) $("kpiNet").textContent = fmtEUR(summary.neto);
-  if ($("kpiGoal")) $("kpiGoal").textContent = `${fmtEUR(summary.colchon_est)} / ${fmtEUR(summary.goal_base)}`;
-
-  const bucketsEl = $("buckets");
-  const byBucket = summary.byBucket || {};
-  const entries = Object.entries(byBucket).sort((a,b)=>b[1]-a[1]);
-
-  if (bucketsEl){
-    bucketsEl.innerHTML = entries.length
-      ? entries.map(([bucket, amt]) => `
-          <div class="bucket">
-            <div>
-              <b>${escapeHtml(bucket)}</b>
-              <div class="meta">Gasto</div>
-            </div>
-            <div><b>${fmtEUR(amt)}</b></div>
-          </div>
-        `).join("")
-      : `<div class="meta">Sin datos de gasto por bucket.</div>`;
+      default:
+        return jsonpOrJson_(
+          p,
+          { ok: false, error: "Unknown path. Use ?path=/settings|/categories|/budgets|/summary|/movements" },
+          400
+        );
+    }
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) }, 500);
   }
 }
 
-function renderMovements(items){
-  const wrap = $("movList");
-  if (!wrap) return;
+function doPost(e) {
+  try {
+    const raw = (e && e.postData && e.postData.contents) ? e.postData.contents : "{}";
+    const data = JSON.parse(raw || "{}");
 
-  if (!items || items.length === 0){
-    wrap.innerHTML = `<div class="meta">No hay movimientos en ${escapeHtml(activeMonth)}.</div>`;
-    return;
-  }
-
-  wrap.innerHTML = items.map(m => {
-    const isIncome = String(m.type||"").toLowerCase() === "ingreso";
-    const sign = isIncome ? "+" : "-";
-    return `
-      <div class="mov">
-        <div>
-          <div><b>${escapeHtml(m.date)}</b></div>
-          <div class="meta">${escapeHtml(m.accounting_month)}</div>
-        </div>
-        <div>
-          <div><b>${escapeHtml(m.raw_category)}</b></div>
-          <div class="meta">${escapeHtml(m.note||"")}</div>
-        </div>
-        <div class="amt">${sign}${fmtEUR(m.amount)}</div>
-        <div class="actions">
-          <button class="btn ghost" data-del="${escapeHtml(m.id)}">Borrar</button>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  wrap.querySelectorAll("[data-del]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-del");
-      if (!id) return;
-      if (!confirm("¿Borrar este movimiento?")) return;
-      try{
-        if (navigator.onLine){
-          await postNoCors({ path:"/delete", id });
-          await sleep(700);
-          await refreshAll();
-          setStatus("Borrado ✅","ok");
-        } else {
-          enqueue({ op:"delete", payload:{ id } });
-          setStatus("Guardado offline (se borrará al sincronizar) ✅","ok");
-        }
-      } catch(e){
-        console.error(e);
-        setStatus("Error borrando.","err");
-      }
-    });
-  });
-}
-
-// ---------- Data flow ----------
-async function loadBoot(){
-  setStatus("Conectando…");
-
-  const s = await jsonp("/settings");
-  if (!s?.ok) throw new Error(s?.error || "Settings error");
-  settings = s.settings || {};
-
-  const c = await jsonp("/categories");
-  if (!c?.ok) throw new Error(c?.error || "Categories error");
-  categories = c.categories || [];
-
-  buildMonthOptions();
-  renderCategories();
-  setDefaultDate();
-  updateOfflineCount();
-
-  await refreshAll();
-  setStatus("Listo ✅", "ok");
-}
-
-async function refreshAll(){
-  const sel = $("monthSelect");
-  if (sel) activeMonth = sel.value;
-
-  setStatus("Actualizando…");
-
-  const sumRes = await jsonp("/summary", { month: activeMonth });
-  if (!sumRes?.ok) throw new Error(sumRes?.error || "Summary error");
-
-  const movRes = await jsonp("/movements", { month: activeMonth });
-  if (!movRes?.ok) throw new Error(movRes?.error || "Movements error");
-
-  renderSummary(sumRes.summary);
-  renderMovements(movRes.movements);
-
-  setStatus("Listo ✅", "ok");
-}
-
-// ---------- Actions ----------
-async function onAdd(){
-  try{
-    const amountStr = String($("amount")?.value || "").replace(",", ".");
-    const amount = Number(amountStr);
-    const type = $("type")?.value || "Gasto";
-    const raw_category = $("category")?.value || "";
-    const date = $("date")?.value || todayISO();
-    const note = $("note")?.value || "";
-
-    if (!raw_category) return setStatus("Selecciona una categoría.","err");
-    if (!amount || isNaN(amount)) return setStatus("Importe inválido.","err");
-
-    const accounting_month = calcAccountingMonth(date);
-    const payload = { path:"/add", amount, type, raw_category, date, accounting_month, note };
-
-    if (navigator.onLine){
-      await postNoCors(payload);
-      await sleep(1500);
-      await refreshAll();
-      setStatus("Añadido ✅","ok");
-    } else {
-      enqueue({ op:"add", payload });
-      setStatus("Sin conexión: guardado offline ✅","ok");
+    if (String(data.api_key || "") !== API_KEY) {
+      return jsonOut_({ ok: false, error: "Unauthorized (API_KEY)" }, 401);
     }
 
-    if ($("amount")) $("amount").value = "";
-    if ($("note")) $("note").value = "";
-  } catch(e){
-    console.error(e);
-    setStatus("Error al añadir.","err");
-  }
-}
+    const path = String(data.path || "").toLowerCase();
 
-async function syncOffline(){
-  const q = getQueue();
-  if (!q.length) return setStatus("No hay pendientes ✅","ok");
-  if (!navigator.onLine) return setStatus("Sin conexión.","err");
+    switch (path) {
+      case "/add":
+        return jsonOut_({ ok: true, movement: addMovement_(data) }, 200);
 
-  try{
-    setStatus(`Sincronizando ${q.length}…`);
-    for (const item of q){
-      if (item.op === "add") await postNoCors(item.payload);
-      if (item.op === "delete") await postNoCors({ path:"/delete", id: item.payload.id });
-      await sleep(250);
+      case "/update":
+        return jsonOut_({ ok: true, movement: updateMovement_(data) }, 200);
+
+      case "/delete":
+        return jsonOut_({ ok: true, deleted: deleteMovement_(String(data.id || "")) }, 200);
+
+      default:
+        return jsonOut_({ ok: false, error: "Unknown path. Use {path:'/add'|'/update'|'/delete'}" }, 400);
     }
-    clearQueue();
-    await sleep(800);
-    await refreshAll();
-    setStatus("Sincronizado ✅","ok");
-  } catch(e){
-    console.error(e);
-    setStatus("Error sincronizando.","err");
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) }, 500);
   }
 }
 
-function clearOffline(){
-  if (!confirm("¿Vaciar cola offline?")) return;
-  clearQueue();
-  setStatus("Cola offline vaciada ✅","ok");
+// -------------------- RESPONSES --------------------
+
+function jsonOut_(obj, code) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-function exportCSV(){
-  jsonp("/movements", { month: activeMonth })
-    .then(res => {
-      if (!res?.ok) throw new Error(res?.error || "Export error");
-      const rows = res.movements || [];
-      const header = ["id","date","accounting_month","type","raw_category","amount","note","created_at"];
-      const csv = [
-        header.join(","),
-        ...rows.map(r => header.map(k => csvCell(r[k])).join(","))
-      ].join("\n");
-
-      const blob = new Blob([csv], { type:"text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `edufinance_${activeMonth}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    })
-    .catch(e => {
-      console.error(e);
-      setStatus("No se pudo exportar CSV.","err");
-    });
+/**
+ * JSONP support (bypass CORS from GitHub Pages).
+ * If ?callback=foo -> returns: foo(<json>);
+ * else -> normal JSON.
+ */
+function jsonpOrJson_(params, obj, code) {
+  const cb = String((params && params.callback) ? params.callback : "");
+  if (cb) {
+    const safeCb = cb.replace(/[^\w$.]/g, "");
+    const js = `${safeCb}(${JSON.stringify(obj)});`;
+    return ContentService.createTextOutput(js).setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return jsonOut_(obj, code || 200);
 }
-function csvCell(v){
-  const s = String(v ?? "");
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replaceAll('"','""')}"`;
+
+// -------------------- SHEET HELPERS --------------------
+
+function ss_() {
+  return SpreadsheetApp.openById(SPREADSHEET_ID);
+}
+
+function sheet_(name) {
+  const sh = ss_().getSheetByName(name);
+  if (!sh) throw new Error(`Missing sheet: ${name}`);
+  return sh;
+}
+
+function headersIndex_(headers, required) {
+  const out = {};
+  required.forEach((k) => {
+    const i = headers.indexOf(k);
+    if (i < 0) throw new Error(`Missing column: ${k}`);
+    out[k] = i;
+  });
+  return out;
+}
+
+// -------------------- NORMALIZERS (CLAVE) --------------------
+
+function isDate_(v) {
+  return Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v);
+}
+
+function normMonth_(v) {
+  if (!v) return "";
+  if (isDate_(v)) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM");
+  }
+  const s = String(v).trim();
+  // Si viene como "2026-01-01" -> "2026-01"
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 7);
+  // Si ya viene "YYYY-MM"
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
   return s;
 }
 
-// ---------- Wire UI ----------
-function wire(){
-  $("addBtn")?.addEventListener("click", onAdd);
-  $("syncBtn")?.addEventListener("click", syncOffline);
-  $("refreshBtn")?.addEventListener("click", refreshAll);
-  $("exportBtn")?.addEventListener("click", exportCSV);
-  $("clearOfflineBtn")?.addEventListener("click", clearOffline);
-
-  $("monthSelect")?.addEventListener("change", refreshAll);
-  $("contableToggle")?.addEventListener("change", () => {
-    buildMonthOptions();
-    refreshAll();
-  });
-
-  // Quick + buttons: data-add="10"/"20" in your HTML
-  document.querySelectorAll("[data-add]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const delta = Number(btn.getAttribute("data-add") || 0);
-      const a = $("amount");
-      if (!a) return;
-      const cur = Number(String(a.value || "0").replace(",", ".") || 0);
-      a.value = (cur + delta).toFixed(2);
-    });
-  });
+function normDate_(v) {
+  if (!v) return "";
+  if (isDate_(v)) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+  const s = String(v).trim();
+  // Si viene con hora o más texto, recorta a YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return s;
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-  try{
-    wire();
-    await loadBoot();
-  } catch(e){
-    console.error(e);
-    setStatus("No carga datos: revisa (1) Web App = Anyone (2) Sheets: pestañas y headers (3) Active? = YES", "err");
+// -------------------- READS --------------------
+
+function getSettings_() {
+  const sh = sheet_("Settings");
+  const values = sh.getDataRange().getValues();
+  const out = {};
+
+  for (let i = 1; i < values.length; i++) {
+    const k = String(values[i][0] || "").trim();
+    const v = String(values[i][1] || "").trim();
+    if (k) out[k] = v;
   }
-});
+
+  // defaults
+  if (!out["contable_day_switch"]) out["contable_day_switch"] = "10";
+  if (!out["writes_enabled"]) out["writes_enabled"] = "TRUE";
+  if (!out["starting_total"]) out["starting_total"] = "2500";
+  if (!out["goal_base"]) out["goal_base"] = "5000";
+
+  return out;
+}
+
+function getCategories_() {
+  const sh = sheet_("Mapa_Categorias");
+  const values = sh.getDataRange().getValues();
+  if (!values.length) return [];
+
+  const headers = values[0].map(String);
+  const idx = {
+    raw: headers.indexOf("RawCategory"),
+    std: headers.indexOf("StdCategory"),
+    bucket: headers.indexOf("Bucket"),
+    active: headers.indexOf("Active?")
+  };
+
+  if (idx.raw < 0 || idx.std < 0 || idx.bucket < 0 || idx.active < 0) {
+    throw new Error("Mapa_Categorias headers must be: RawCategory, StdCategory, Bucket, Active?");
+  }
+
+  const cats = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const active = String(row[idx.active] || "").trim().toUpperCase() === "YES";
+    if (!active) continue;
+
+    const raw = String(row[idx.raw] || "").trim();
+    if (!raw) continue;
+
+    cats.push({
+      raw,
+      std: String(row[idx.std] || "").trim(),
+      bucket: String(row[idx.bucket] || "").trim()
+    });
+  }
+  return cats;
+}
+
+function getBudgets_() {
+  const sh = ss_().getSheetByName("Presupuestos");
+  if (!sh) return [];
+  const values = sh.getDataRange().getValues();
+  if (!values.length) return [];
+
+  const headers = values[0].map(String);
+  const b = headers.indexOf("Bucket");
+  const m = headers.indexOf("MonthlyLimit");
+  if (b < 0 || m < 0) return [];
+
+  const out = [];
+  for (let i = 1; i < values.length; i++) {
+    const bucket = String(values[i][b] || "").trim();
+    const limit = Number(values[i][m] || 0);
+    if (bucket) out.push({ bucket, monthlyLimit: limit });
+  }
+  return out;
+}
+
+function getMovements_(month) {
+  const sh = sheet_("Movimientos");
+  const values = sh.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  const headers = values[0].map(String);
+  const idx = headersIndex_(headers, [
+    "id", "date", "accounting_month", "type", "raw_category", "amount", "note", "created_at"
+  ]);
+
+  const out = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+
+    // ✅ NORMALIZAR (lo que te está rompiendo ahora)
+    const m = normMonth_(row[idx.accounting_month]);
+    if (month && m !== month) continue;
+
+    out.push({
+      id: String(row[idx.id] || ""),
+      date: normDate_(row[idx.date]),
+      accounting_month: m,
+      type: String(row[idx.type] || ""),
+      raw_category: String(row[idx.raw_category] || ""),
+      amount: Number(row[idx.amount] || 0),
+      note: String(row[idx.note] || ""),
+      created_at: String(row[idx.created_at] || "")
+    });
+  }
+
+  out.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+  return out;
+}
+
+function getSummary_(month) {
+  const cats = getCategories_();
+  const map = {};
+  cats.forEach((c) => map[c.raw] = c);
+
+  const moves = getMovements_(month);
+
+  let ingresos = 0;
+  let gastos = 0;
+  const byBucket = {};
+
+  for (const mv of moves) {
+    const amt = Number(mv.amount || 0);
+    const isIncome = String(mv.type || "").toLowerCase() === "ingreso";
+
+    if (isIncome) ingresos += amt;
+    else gastos += amt;
+
+    if (!isIncome) {
+      const cat = map[mv.raw_category] || null;
+      const bucket = cat ? (cat.bucket || "Sin_categoria") : "Sin_categoria";
+      byBucket[bucket] = (byBucket[bucket] || 0) + amt;
+    }
+  }
+
+  const neto = ingresos - gastos;
+
+  const settings = getSettings_();
+  const starting = Number(settings.starting_total || 0);
+  const goal = Number(settings.goal_base || 5000);
+
+  return {
+    month,
+    ingresos: round2_(ingresos),
+    gastos: round2_(gastos),
+    neto: round2_(neto),
+    byBucket,
+    starting_total: starting,
+    goal_base: goal,
+    colchon_est: round2_(starting + neto)
+  };
+}
+
+// -------------------- WRITES --------------------
+
+function addMovement_(data) {
+  const settings = getSettings_();
+  if (String(settings.writes_enabled || "TRUE").toUpperCase() !== "TRUE") {
+    throw new Error("writes_enabled is FALSE in Settings");
+  }
+
+  const sh = sheet_("Movimientos");
+  const values = sh.getDataRange().getValues();
+  const headers = values[0].map(String);
+  const idx = headersIndex_(headers, [
+    "id", "date", "accounting_month", "type", "raw_category", "amount", "note", "created_at"
+  ]);
+
+  const id = String(Date.now());
+  const date = String(data.date || "");
+  const accounting_month = String(data.accounting_month || "");
+  const type = String(data.type || "Gasto");
+  const raw_category = String(data.raw_category || "");
+  const amount = Number(data.amount || 0);
+  const note = String(data.note || "");
+  const created_at = new Date().toISOString();
+
+  const row = new Array(headers.length).fill("");
+  row[idx.id] = id;
+  row[idx.date] = date;
+
+  // ✅ FORZAR TEXTO PARA QUE SHEETS NO LO CONVIERTA A FECHA
+  row[idx.accounting_month] = "'" + accounting_month;
+
+  row[idx.type] = type;
+  row[idx.raw_category] = raw_category;
+  row[idx.amount] = amount;
+  row[idx.note] = note;
+  row[idx.created_at] = created_at;
+
+  sh.appendRow(row);
+
+  return { id, date, accounting_month, type, raw_category, amount, note, created_at };
+}
+
+function updateMovement_(data) {
+  const settings = getSettings_();
+  if (String(settings.writes_enabled || "TRUE").toUpperCase() !== "TRUE") {
+    throw new Error("writes_enabled is FALSE in Settings");
+  }
+
+  const id = String(data.id || "");
+  if (!id) throw new Error("Missing id");
+
+  const sh = sheet_("Movimientos");
+  const values = sh.getDataRange().getValues();
+  const headers = values[0].map(String);
+  const idx = headersIndex_(headers, [
+    "id", "date", "accounting_month", "type", "raw_category", "amount", "note", "created_at"
+  ]);
+
+  for (let r = 1; r < values.length; r++) {
+    if (String(values[r][idx.id] || "") === id) {
+
+      if (data.date != null) values[r][idx.date] = String(data.date);
+
+      // ✅ si actualizas accounting_month, también lo forzamos a texto
+      if (data.accounting_month != null) values[r][idx.accounting_month] = "'" + String(data.accounting_month);
+
+      if (data.type != null) values[r][idx.type] = String(data.type);
+      if (data.raw_category != null) values[r][idx.raw_category] = String(data.raw_category);
+      if (data.amount != null) values[r][idx.amount] = Number(data.amount);
+      if (data.note != null) values[r][idx.note] = String(data.note);
+
+      sh.getRange(r + 1, 1, 1, headers.length).setValues([values[r]]);
+
+      return {
+        id,
+        date: normDate_(values[r][idx.date]),
+        accounting_month: normMonth_(values[r][idx.accounting_month]),
+        type: String(values[r][idx.type] || ""),
+        raw_category: String(values[r][idx.raw_category] || ""),
+        amount: Number(values[r][idx.amount] || 0),
+        note: String(values[r][idx.note] || ""),
+        created_at: String(values[r][idx.created_at] || "")
+      };
+    }
+  }
+
+  throw new Error("Movement id not found");
+}
+
+function deleteMovement_(id) {
+  const settings = getSettings_();
+  if (String(settings.writes_enabled || "TRUE").toUpperCase() !== "TRUE") {
+    throw new Error("writes_enabled is FALSE in Settings");
+  }
+
+  if (!id) throw new Error("Missing id");
+
+  const sh = sheet_("Movimientos");
+  const values = sh.getDataRange().getValues();
+  const headers = values[0].map(String);
+  const idx = headersIndex_(headers, ["id"]);
+
+  for (let r = 1; r < values.length; r++) {
+    if (String(values[r][idx.id] || "") === id) {
+      sh.deleteRow(r + 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+// -------------------- UTILS --------------------
+
+function round2_(n) {
+  return Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100;
+}
