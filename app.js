@@ -291,7 +291,7 @@ async function onAdd(){
 
     if (navigator.onLine){
       await postNoCors(payload);
-      await sleep(800);
+      await sleep(1500);
       await refreshAll();
       setStatus("Añadido ✅","ok");
     } else {
