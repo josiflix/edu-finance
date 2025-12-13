@@ -29,11 +29,13 @@ function jsonp(path, params = {}){
   return new Promise((resolve, reject) => {
     const cbName = "__edf_cb_" + Math.random().toString(16).slice(2);
     const qs = new URLSearchParams({
-      api_key: API_KEY,
-      path,
-      callback: cbName,
-      ...params,
-    });
+  api_key: API_KEY,
+  path,
+  callback: cbName,
+  _ts: String(Date.now()), // <- anti-cache SI o SI
+  ...params,
+});
+
 
     const script = document.createElement("script");
     script.src = `${BACKEND_URL}?${qs.toString()}`;
