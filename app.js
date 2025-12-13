@@ -1,7 +1,7 @@
 // EduFinance Pocket - Frontend (GitHub Pages)
 // Lecturas por JSONP (sin CORS). Escrituras por POST no-cors.
 
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyn60BL8Jqvjlk6YGlW0QujTPoEKzfMtB8i0DV7NaldKmq51JvipnIq9JnehGGiM_Dr/exec";
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxMxHKEDAKeKZMn2yBfxldjerWxok0H9cOq7zOemqQQdS-lEW1opbtCqUWLeGrIZ5Ih/exec";
 const API_KEY     = "1234567890111213141516171819202122232425";
 
 const $ = (id) => document.getElementById(id);
