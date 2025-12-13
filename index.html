@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>EduFinance Pocket</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="stylesheet" href="style.css"/>
+  <meta name="theme-color" content="#0b1220"/>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">€</span>
+    <div>
+      <div class="title">EduFinance Pocket</div>
+      <div class="subtitle">Añade en 5–10s · mes contable automático · Google Sheets</div>
+    </div>
+  </div>
+  <div class="top-actions">
+    <select id="monthSelect" class="select"></select>
+    <label class="toggle">
+      <input type="checkbox" id="contableToggle" checked>
+      <span>Modo contable</span>
+    </label>
+    <button id="syncBtn" class="btn ghost">Sync</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card">
+    <h2>Nuevo movimiento</h2>
+    <div class="grid2">
+      <div>
+        <label>Importe (€)</label>
+        <input id="amount" type="number" step="0.01" placeholder="12.50"/>
+      </div>
+      <div>
+        <label>Tipo</label>
+        <select id="type" class="select">
+          <option>Gasto</option>
+          <option>Ingreso</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Categoría</label>
+    <select id="category" class="select"></select>
+
+    <div class="grid2">
+      <div>
+        <label>Fecha</label>
+        <input id="date" type="date"/>
+      </div>
+      <div>
+        <label>Nota (opcional)</label>
+        <input id="note" type="text" placeholder="Ej: súper, gasolina, regalo..."/>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="addBtn" class="btn">Añadir</button>
+      <button data-add="10" class="btn ghost">+10€</button>
+      <button data-add="20" class="btn ghost">+20€</button>
+      <span id="status" class="status"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row space">
+      <h2>Resumen del mes</h2>
+      <button id="refreshBtn" class="btn ghost">Actualizar</button>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="k">Ingresos</div><div id="kpiIn" class="v">—</div></div>
+      <div class="kpi"><div class="k">Gastos</div><div id="kpiOut" class="v">—</div></div>
+      <div class="kpi"><div class="k">Neto</div><div id="kpiNet" class="v">—</div></div>
+      <div class="kpi"><div class="k">Colchón</div><div id="kpiGoal" class="v">—</div></div>
+    </div>
+    <div id="alerts" class="alerts"></div>
+    <div id="buckets" class="buckets"></div>
+  </section>
+
+  <section class="card">
+    <div class="row space">
+      <h2>Movimientos del mes</h2>
+      <div class="row">
+        <button id="exportBtn" class="btn ghost">Export CSV</button>
+      </div>
+    </div>
+    <div id="movList" class="movlist"></div>
+  </section>
+
+  <section class="card">
+    <h2>Pendientes offline</h2>
+    <div class="row space">
+      <div>Si estás sin cobertura, la app guarda en local y luego sincroniza.</div>
+      <button id="clearOfflineBtn" class="btn ghost">Vaciar pendientes</button>
+    </div>
+    <div class="row space">
+      <div>Pendientes</div><div id="offlineCount" class="pill">0</div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    Tip: mantén las categorías activas en <b>Mapa_Categorias</b> (Active? = YES). · Si quieres bloquear cambios: Settings → writes_enabled = FALSE
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
