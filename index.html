@@ -20,9 +20,7 @@
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Roboto', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-    /* --- LAYOUT RESPONSIVO (La clave del arreglo en PC) --- */
-    
-    /* MOBILE DEFAULT */
+    /* --- LAYOUT --- */
     .app-shell { display: flex; flex-direction: column; height: 100%; width: 100%; }
     .nav-bar { order: 2; height: var(--nav-h); background: var(--surface); display: flex; justify-content: space-around; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); z-index: 100; }
     main { order: 1; flex: 1; overflow-y: auto; padding: 16px; position: relative; }
@@ -37,15 +35,9 @@
       body { flex-direction: row; }
       .app-shell { flex-direction: row; }
       .nav-bar { 
-        order: 1; 
-        width: var(--nav-w); 
-        height: 100%; 
-        flex-direction: column; 
-        justify-content: flex-start; 
-        padding-top: 40px; 
-        border-top: none; 
-        border-right: 1px solid rgba(255,255,255,0.1); 
-        gap: 10px;
+        order: 1; width: var(--nav-w); height: 100%; flex-direction: column; 
+        justify-content: flex-start; padding-top: 40px; border-top: none; 
+        border-right: 1px solid rgba(255,255,255,0.1); gap: 10px;
       }
       .nav-btn { flex-direction: row; gap: 16px; width: 90%; padding: 16px; border-radius: 28px; }
       .nav-btn.active { background: var(--surface-high); }
@@ -61,6 +53,7 @@
     .btn { background: var(--primary); color: var(--on-primary); border: none; padding: 12px 24px; border-radius: 20px; font-weight: 500; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
     .btn.sec { background: var(--surface-high); color: var(--primary); }
     .btn.danger { background: #5a1a1a; color: #ffb4ab; }
+    .btn.link { background: transparent; color: var(--sec); text-align: right; font-size: 14px; padding: 8px; width: auto; margin-left: auto; display: block; }
 
     .fab { position: fixed; bottom: 100px; right: 24px; width: 56px; height: 56px; border-radius: 16px; background: var(--primary-con); color: white; border: none; font-size: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 50; }
     @media (min-width: 800px) { .fab { bottom: 40px; right: 40px; } }
@@ -143,6 +136,11 @@
   <div class="dialog">
     <h2>Movimiento</h2>
     <input type="hidden" id="txId">
+    
+    <button onclick="convertToRec()" class="btn link" style="margin-bottom:10px;">
+      🔄 Crear Regla Recurrente
+    </button>
+
     <div style="display:flex; gap:10px">
       <input type="number" id="txAmt" placeholder="0.00" style="font-size:24px">
       <select id="txType" style="width:120px"><option>Gasto</option><option>Ingreso</option></select>
@@ -164,7 +162,7 @@
     <h2>Configurar Fijo</h2>
     <input type="hidden" id="recId">
     
-    <label>Título</label>
+    <label>Título (Concepto)</label>
     <input type="text" id="recTitle" placeholder="Ej: Netflix / Coche">
     
     <div style="display:flex; gap:10px">
@@ -178,12 +176,12 @@
     <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:10px">
       <label style="display:flex; align-items:center; gap:10px;">
         <input type="checkbox" id="recIsInst" style="width:20px; margin:0;" onchange="toggleInst(this.checked)"> 
-        Es una amortización (a plazos)
+        Es una amortización (o temporal)
       </label>
       
       <div id="instOpts" class="hidden" style="margin-top:10px">
-        <label>Número de Pagos (Meses)</label>
-        <input type="number" id="recTotal" placeholder="Ej: 12">
+        <label>Número de Pagos (Meses totales)</label>
+        <input type="number" id="recTotal" placeholder="Ej: 3 (Dentista) o 12 (Coche)">
         <label>Fecha Inicio Primer Pago</label>
         <input type="date" id="recStart">
       </div>
@@ -199,7 +197,7 @@
 
 <script>
 // --- LOGIC ---
-const API = "https://script.google.com/macros/s/AKfycbwsbU9ovXgLjhTX2D8TLuz3sxwnDebHNVzHTBtszPE_iIbUnn7TEcuUivg_ECKnfyZf/exec"; // <--- CAMBIA ESTO
+const API = "https://script.google.com/macros/s/AKfycbw_wqPRJ_jeA0A5xw6IynN1yEmG58f-Qu-1whe1s2nd5p3jq_8ryUA5Z97k_Utq3mKp/exec"; 
 const KEY = "1234567890111213141516171819202122232425";
 
 let state = { month: new Date().toISOString().slice(0,7), cats: [], movs: [], recs: [] };
@@ -249,6 +247,31 @@ async function delTx() {
   closeDlgs();
   await api('/delete', {id}, 'POST');
   loadHome();
+}
+
+// NUEVA FUNCIÓN: Copiar datos del modal de transacción al de recurrentes
+function convertToRec() {
+  // 1. Coger datos del modal actual
+  const note = document.getElementById('txNote').value;
+  const amt = document.getElementById('txAmt').value;
+  const cat = document.getElementById('txCat').value;
+  const type = document.getElementById('txType').value;
+  const date = document.getElementById('txDate').value;
+
+  if(!amt) return alert("Primero ponle un importe y guárdalo, o rellénalo.");
+
+  // 2. Cerrar y Abrir modal Recurrente
+  closeDlgs();
+  openRecModal(); // Abre en modo "Nuevo"
+
+  // 3. Rellenar campos
+  document.getElementById('recTitle').value = note || "Nuevo Gasto Fijo";
+  document.getElementById('recAmt').value = amt;
+  document.getElementById('recCat').value = cat;
+  document.getElementById('recType').value = type;
+  
+  // Por defecto, sugerimos que empiece en la fecha del movimiento original
+  document.getElementById('recStart').value = date;
 }
 
 async function saveRec() {
@@ -359,8 +382,13 @@ function openRecModal(id) {
     document.getElementById('btnDelRec').style.display = 'inline-block';
   } else { // New
     document.getElementById('recId').value = "";
-    document.getElementById('recTitle').value = "";
-    document.getElementById('recAmt').value = "";
+    // Si no venimos de "ConvertToRec", limpiamos
+    if(document.getElementById('recTitle').value && !id) {
+      // Dejamos los datos pre-rellenos por convertToRec
+    } else {
+      document.getElementById('recTitle').value = "";
+      document.getElementById('recAmt').value = "";
+    }
     document.getElementById('recIsInst').checked = false;
     toggleInst(false);
     document.getElementById('btnDelRec').style.display = 'none';
