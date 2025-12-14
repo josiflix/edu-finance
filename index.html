@@ -3,102 +3,411 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>EduFinance MD3</title>
+  <title>EduFinance Final</title>
   
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
   
-  <link rel="stylesheet" href="style.css">
+  <style>
+    /* --- DESIGN SYSTEM (MD3 Dark) --- */
+    :root {
+      --bg: #141218; --surface: #1D1B20; --surface-high: #2B2930;
+      --primary: #D0BCFF; --on-primary: #381E72; --primary-con: #4F378B;
+      --sec: #CCC2DC; --error: #F2B8B5; --text: #E6E1E5; --outline: #938F99;
+      --nav-w: 250px; --nav-h: 80px;
+    }
+    
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Roboto', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* --- LAYOUT RESPONSIVO (La clave del arreglo en PC) --- */
+    
+    /* MOBILE DEFAULT */
+    .app-shell { display: flex; flex-direction: column; height: 100%; width: 100%; }
+    .nav-bar { order: 2; height: var(--nav-h); background: var(--surface); display: flex; justify-content: space-around; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); z-index: 100; }
+    main { order: 1; flex: 1; overflow-y: auto; padding: 16px; position: relative; }
+    
+    .nav-btn { background: none; border: none; color: var(--outline); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; width: 60px; cursor: pointer; }
+    .nav-icon { width: 64px; height: 32px; border-radius: 16px; display: flex; justify-content: center; align-items: center; transition: 0.2s; }
+    .nav-btn.active .nav-icon { background: var(--primary-con); color: var(--text); }
+    .nav-btn.active { color: var(--text); }
+
+    /* PC / TABLET OVERRIDE */
+    @media (min-width: 800px) {
+      body { flex-direction: row; }
+      .app-shell { flex-direction: row; }
+      .nav-bar { 
+        order: 1; 
+        width: var(--nav-w); 
+        height: 100%; 
+        flex-direction: column; 
+        justify-content: flex-start; 
+        padding-top: 40px; 
+        border-top: none; 
+        border-right: 1px solid rgba(255,255,255,0.1); 
+        gap: 10px;
+      }
+      .nav-btn { flex-direction: row; gap: 16px; width: 90%; padding: 16px; border-radius: 28px; }
+      .nav-btn.active { background: var(--surface-high); }
+      main { padding: 40px; max-width: 1200px; margin: 0 auto; width: 100%; }
+    }
+
+    /* --- COMPONENTS --- */
+    .card { background: var(--surface); border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+    .display { font-size: 42px; margin: 8px 0 24px; }
+    .row { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
+    .row:hover { background: rgba(255,255,255,0.02); }
+    
+    .btn { background: var(--primary); color: var(--on-primary); border: none; padding: 12px 24px; border-radius: 20px; font-weight: 500; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
+    .btn.sec { background: var(--surface-high); color: var(--primary); }
+    .btn.danger { background: #5a1a1a; color: #ffb4ab; }
+
+    .fab { position: fixed; bottom: 100px; right: 24px; width: 56px; height: 56px; border-radius: 16px; background: var(--primary-con); color: white; border: none; font-size: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 50; }
+    @media (min-width: 800px) { .fab { bottom: 40px; right: 40px; } }
+
+    /* Inputs */
+    input, select { width: 100%; background: var(--surface-high); border: 1px solid var(--outline); color: white; padding: 14px; border-radius: 8px; margin-bottom: 12px; font-size: 16px; outline: none; }
+    input:focus { border-color: var(--primary); border-width: 2px; padding: 13px; }
+
+    /* Dialog */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(4px); }
+    .overlay.open { display: flex; }
+    .dialog { background: var(--surface); width: 100%; height: 100%; padding: 24px; display: flex; flex-direction: column; overflow-y: auto; }
+    @media (min-width: 600px) { .dialog { width: 450px; height: auto; border-radius: 28px; max-height: 90vh; } }
+
+    .hidden { display: none; }
+    .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  </style>
 </head>
 <body>
 
-  <nav class="navigation-bar">
-    <button class="nav-item active" onclick="navTo('home')">
-      <div class="nav-icon-container">
-        <span class="material-symbols-rounded">account_balance_wallet</span>
-      </div>
-      <span class="nav-label">Resumen</span>
+<div class="app-shell">
+  <nav class="nav-bar">
+    <div style="font-size:20px; font-weight:bold; margin-bottom:20px; padding-left:20px; display:none; @media(min-width:800px){display:block}">EduFinance</div>
+    <button class="nav-btn active" onclick="nav('home')">
+      <div class="nav-icon"><span class="material-symbols-rounded">dashboard</span></div><span>Inicio</span>
     </button>
-    <button class="nav-item" onclick="navTo('analysis')">
-      <div class="nav-icon-container">
-        <span class="material-symbols-rounded">monitoring</span>
-      </div>
-      <span class="nav-label">Análisis</span>
+    <button class="nav-btn" onclick="nav('conf')">
+      <div class="nav-icon"><span class="material-symbols-rounded">settings_recurring</span></div><span>Fijos/Amort.</span>
     </button>
   </nav>
 
   <main>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
-      <span style="font-size:22px;">EduFinance</span>
-      <select id="monthSelector" class="text-field" style="width:auto; margin:0; padding:8px 16px; border-radius:20px;"></select>
-    </div>
-
+    
     <div id="view-home">
-      <div class="card">
-        <div class="card-title">Disponible Estimado</div>
-        <div class="display-large" id="txtNet">...</div>
-        <div style="display:flex; gap:24px; margin-top:24px;">
-          <div>
-            <div class="card-title" style="margin:0">Ingresos</div>
-            <div style="font-size:18px; color:var(--md-sys-color-tertiary);" id="txtIn">...</div>
-          </div>
-          <div>
-            <div class="card-title" style="margin:0">Gastos</div>
-            <div style="font-size:18px; color:var(--md-sys-color-error);" id="txtOut">...</div>
-          </div>
-        </div>
+      <div class="top-bar">
+        <span style="font-size:22px">Resumen</span>
+        <select id="monthPick" style="width:auto; margin:0; border-radius:20px"></select>
       </div>
 
-      <div class="card-title" style="margin-left:8px;">Últimos Movimientos</div>
-      <div id="listTx"></div>
-      <div style="height:100px"></div>
-    </div>
-
-    <div id="view-analysis" class="hidden">
       <div class="card">
-        <div class="card-title">Progreso Objetivo</div>
-        <div class="display-large" id="txtGoalPercent">0%</div>
-        <div class="bar-container" style="margin-top:16px;">
-          <div class="track"><div id="barGoal" class="fill" style="width:0%"></div></div>
+        <div>Disponible</div>
+        <div class="display" id="valNet">--</div>
+        <div style="display:flex; gap:20px">
+          <div style="color:#a8dab5">Ing: <span id="valIn">--</span></div>
+          <div style="color:#ffb4ab">Gas: <span id="valOut">--</span></div>
         </div>
-        <div class="card-title" id="txtGoalDetail">Meta: --</div>
       </div>
-
-      <div class="card-title" style="margin-left:8px;">Gastos por Categoría</div>
-      <div id="listCats"></div>
-      <div style="height:100px"></div>
-    </div>
-  </main>
-
-  <button class="fab" onclick="openModal()">
-    <span class="material-symbols-rounded">add</span>
-  </button>
-
-  <div id="dialog" class="dialog-overlay" onclick="if(event.target===this) closeModal()">
-    <div class="dialog">
-      <h2 style="margin:0 0 24px 0;" id="modalTitle">Nuevo Movimiento</h2>
-      <input type="hidden" id="inpId">
       
-      <div style="display:flex; gap:16px;">
-        <input type="number" id="inpAmt" class="text-field" placeholder="0.00" style="font-size:24px;">
-        <select id="inpType" class="text-field" style="width:120px;">
-          <option>Gasto</option>
-          <option>Ingreso</option>
-        </select>
+      <div style="margin-bottom:16px; display:flex; justify-content:flex-end;">
+         <button onclick="autofillMonth()" class="btn sec" style="width:auto; display:flex; gap:8px; align-items:center;">
+           <span class="material-symbols-rounded">auto_fix_high</span> Autocompletar Mes
+         </button>
       </div>
 
-      <select id="inpCat" class="text-field"><option>Cargando...</option></select>
-      <input type="text" id="inpNote" class="text-field" placeholder="Nota">
-      <input type="date" id="inpDate" class="text-field">
-
-      <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
-        <button class="btn btn-filled" onclick="save()">Guardar</button>
-        <button class="btn btn-tonal" id="btnDel" onclick="del()" style="display:none; background:var(--md-sys-color-error); color:black;">Eliminar</button>
-        <button class="btn btn-text" onclick="closeModal()">Cancelar</button>
+      <div class="card" style="padding:0">
+        <div id="txList"></div>
       </div>
+    </div>
+
+    <div id="view-conf" class="hidden">
+      <div class="top-bar">
+        <span style="font-size:22px">Gastos Fijos y Plazos</span>
+      </div>
+      <div class="card" style="background: var(--surface-high); border: 1px dashed var(--outline);">
+        <p style="font-size:14px; opacity:0.8; margin:0;">
+          Configura aquí tus gastos recurrentes (Netflix, Internet) o amortizaciones (Coche, Móvil). 
+          Luego usa el botón <b>"Autocompletar Mes"</b> en Inicio para generarlos cada mes.
+        </p>
+      </div>
+      <button class="btn" onclick="openRecModal()">+ Añadir Fijo / Plazo</button>
+      <div id="recList" style="margin-top:20px"></div>
+    </div>
+
+  </main>
+</div>
+
+<button class="fab" id="fabMain" onclick="openTxModal()"><span class="material-symbols-rounded">add</span></button>
+
+<div id="dlgTx" class="overlay" onclick="if(event.target===this) closeDlgs()">
+  <div class="dialog">
+    <h2>Movimiento</h2>
+    <input type="hidden" id="txId">
+    <div style="display:flex; gap:10px">
+      <input type="number" id="txAmt" placeholder="0.00" style="font-size:24px">
+      <select id="txType" style="width:120px"><option>Gasto</option><option>Ingreso</option></select>
+    </div>
+    <select id="txCat"><option>Cargando...</option></select>
+    <input type="text" id="txNote" placeholder="Concepto">
+    <input type="date" id="txDate">
+    
+    <div style="margin-top:auto">
+      <button class="btn" onclick="saveTx()">Guardar</button>
+      <button class="btn danger" id="btnDelTx" onclick="delTx()" style="display:none">Eliminar</button>
+      <button class="btn sec" onclick="closeDlgs()">Cancelar</button>
     </div>
   </div>
+</div>
 
-  <script src="app.js"></script>
+<div id="dlgRec" class="overlay" onclick="if(event.target===this) closeDlgs()">
+  <div class="dialog">
+    <h2>Configurar Fijo</h2>
+    <input type="hidden" id="recId">
+    
+    <label>Título</label>
+    <input type="text" id="recTitle" placeholder="Ej: Netflix / Coche">
+    
+    <div style="display:flex; gap:10px">
+      <div style="flex:1"><label>Importe</label><input type="number" id="recAmt" placeholder="0.00"></div>
+      <div style="flex:1"><label>Tipo</label><select id="recType"><option>Gasto</option><option>Ingreso</option></select></div>
+    </div>
+    
+    <label>Categoría</label>
+    <select id="recCat"></select>
+
+    <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:10px">
+      <label style="display:flex; align-items:center; gap:10px;">
+        <input type="checkbox" id="recIsInst" style="width:20px; margin:0;" onchange="toggleInst(this.checked)"> 
+        Es una amortización (a plazos)
+      </label>
+      
+      <div id="instOpts" class="hidden" style="margin-top:10px">
+        <label>Número de Pagos (Meses)</label>
+        <input type="number" id="recTotal" placeholder="Ej: 12">
+        <label>Fecha Inicio Primer Pago</label>
+        <input type="date" id="recStart">
+      </div>
+    </div>
+
+    <div style="margin-top:auto">
+      <button class="btn" onclick="saveRec()">Guardar Configuración</button>
+      <button class="btn danger" id="btnDelRec" onclick="delRec()" style="display:none">Borrar Config</button>
+      <button class="btn sec" onclick="closeDlgs()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- LOGIC ---
+const API = "https://script.google.com/macros/s/AKfycbxMxHKEDAKeKZMn2yBfxldjerWxok0H9cOq7zOemqQQdS-lEW1opbtCqUWLeGrIZ5Ih/exec"; // <--- CAMBIA ESTO
+const KEY = "1234567890111213141516171819202122232425";
+
+let state = { month: new Date().toISOString().slice(0,7), cats: [], movs: [], recs: [] };
+
+// Init
+window.onload = async () => {
+  initDate();
+  try {
+    const res = await api('/init');
+    state.cats = res.categories;
+    state.recs = res.recurring;
+    fillCats();
+    loadHome();
+    renderRecList();
+  } catch(e) { alert("Error: " + e.message); }
+};
+
+async function loadHome() {
+  document.body.style.opacity = "0.7";
+  const d = await api('/data', { month: state.month });
+  state.movs = d.movements;
+  renderHome(d.summary, d.movements);
+  document.body.style.opacity = "1";
+}
+
+// --- ACTIONS ---
+
+async function saveTx() {
+  const p = {
+    id: document.getElementById('txId').value || null,
+    amount: document.getElementById('txAmt').value,
+    type: document.getElementById('txType').value,
+    raw_category: document.getElementById('txCat').value,
+    note: document.getElementById('txNote').value,
+    date: document.getElementById('txDate').value,
+    accounting_month: state.month // Simple approach
+  };
+  if(!p.amount) return alert("Falta importe");
+  closeDlgs();
+  await api(p.id ? '/update' : '/add', p, 'POST');
+  loadHome();
+}
+
+async function delTx() {
+  if(!confirm("¿Borrar?")) return;
+  const id = document.getElementById('txId').value;
+  closeDlgs();
+  await api('/delete', {id}, 'POST');
+  loadHome();
+}
+
+async function saveRec() {
+  const p = {
+    id: document.getElementById('recId').value || null,
+    title: document.getElementById('recTitle').value,
+    amount: document.getElementById('recAmt').value,
+    type: document.getElementById('recType').value,
+    category: document.getElementById('recCat').value,
+    is_installment: document.getElementById('recIsInst').checked,
+    total_installments: document.getElementById('recTotal').value,
+    start_date: document.getElementById('recStart').value
+  };
+  if(!p.title || !p.amount) return alert("Faltan datos");
+  closeDlgs();
+  await api('/save_recurring', p, 'POST');
+  // Refresh recurring list locally would be better, but full reload is safer
+  location.reload(); 
+}
+
+async function delRec() {
+  if(!confirm("¿Borrar configuración?")) return;
+  const id = document.getElementById('recId').value;
+  closeDlgs();
+  await api('/delete_recurring', {id}, 'POST');
+  location.reload();
+}
+
+async function autofillMonth() {
+  if(!confirm("¿Generar gastos fijos y amortizaciones para " + state.month + "?")) return;
+  document.body.style.cursor = "wait";
+  const res = await api('/generate_month', { month: state.month }, 'POST');
+  alert("Generados: " + (res.count || 0));
+  document.body.style.cursor = "default";
+  loadHome();
+}
+
+// --- UI HELPERS ---
+
+function renderHome(sum, list) {
+  const fmt = n => Number(n).toLocaleString('es-ES', {style:'currency', currency:'EUR'});
+  document.getElementById('valNet').innerText = fmt(sum.forecast);
+  document.getElementById('valIn').innerText = fmt(sum.income);
+  document.getElementById('valOut').innerText = fmt(sum.expense);
+  
+  const div = document.getElementById('txList');
+  if(!list.length) { div.innerHTML = "<div style='text-align:center; padding:20px; opacity:0.5'>Sin movimientos</div>"; return; }
+  
+  div.innerHTML = list.map(m => `
+    <div class="row" onclick="openTxModal('${m.id}')">
+      <div>
+        <div style="font-weight:500">${m.raw_category}</div>
+        <div style="font-size:12px; opacity:0.7">${m.note || m.date}</div>
+      </div>
+      <div style="font-weight:bold; color:${m.type==='Ingreso'?'#a8dab5':'#fff'}">
+        ${m.type==='Ingreso'?'+':''}${fmt(m.amount)}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderRecList() {
+  const div = document.getElementById('recList');
+  if(!state.recs.length) { div.innerHTML = "No hay config."; return; }
+  div.innerHTML = state.recs.map(r => `
+    <div class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer" onclick="openRecModal('${r.id}')">
+      <div>
+        <div style="font-weight:bold">${r.title}</div>
+        <div style="font-size:12px; opacity:0.7">${r.is_installment ? 'Amortización ('+r.total_installments+' pagos)' : 'Fijo Mensual'}</div>
+      </div>
+      <div>${Number(r.amount).toFixed(2)}€</div>
+    </div>
+  `).join('');
+}
+
+function openTxModal(id) {
+  document.getElementById('dlgTx').classList.add('open');
+  if(id) {
+    const m = state.movs.find(x => x.id === id);
+    document.getElementById('txId').value = id;
+    document.getElementById('txAmt').value = m.amount;
+    document.getElementById('txType').value = m.type;
+    document.getElementById('txCat').value = m.raw_category;
+    document.getElementById('txNote').value = m.note;
+    document.getElementById('txDate').value = m.date;
+    document.getElementById('btnDelTx').style.display = 'inline-block';
+  } else {
+    document.getElementById('txId').value = "";
+    document.getElementById('txAmt').value = "";
+    document.getElementById('btnDelTx').style.display = 'none';
+    document.getElementById('txDate').value = new Date().toISOString().slice(0,10);
+  }
+}
+
+function openRecModal(id) {
+  document.getElementById('dlgRec').classList.add('open');
+  if(id && typeof id === 'string') { // Edit
+    const r = state.recs.find(x => x.id === id);
+    document.getElementById('recId').value = id;
+    document.getElementById('recTitle').value = r.title;
+    document.getElementById('recAmt').value = r.amount;
+    document.getElementById('recType').value = r.type;
+    document.getElementById('recCat').value = r.category;
+    document.getElementById('recIsInst').checked = r.is_installment;
+    toggleInst(r.is_installment);
+    document.getElementById('recTotal').value = r.total_installments;
+    document.getElementById('recStart').value = r.start_date;
+    document.getElementById('btnDelRec').style.display = 'inline-block';
+  } else { // New
+    document.getElementById('recId').value = "";
+    document.getElementById('recTitle').value = "";
+    document.getElementById('recAmt').value = "";
+    document.getElementById('recIsInst').checked = false;
+    toggleInst(false);
+    document.getElementById('btnDelRec').style.display = 'none';
+  }
+}
+
+// --- UTILS ---
+function nav(v) {
+  document.getElementById('view-home').classList.add('hidden');
+  document.getElementById('view-conf').classList.add('hidden');
+  document.getElementById('view-'+v).classList.remove('hidden');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('fabMain').style.display = v==='home'?'flex':'none';
+}
+
+function toggleInst(show) { document.getElementById('instOpts').classList.toggle('hidden', !show); }
+function closeDlgs() { document.querySelectorAll('.overlay').forEach(d => d.classList.remove('open')); }
+
+async function api(path, p={}, m='GET') {
+  const url = new URL(API);
+  const q = { ...p, path, api_key: KEY, _t: Date.now() };
+  if(m==='GET') Object.keys(q).forEach(k => url.searchParams.append(k, q[k]));
+  const res = await fetch(url, { method: m, mode: m==='POST'?'no-cors':'cors', body: m==='POST'?JSON.stringify(q):null });
+  if(m==='POST') return {ok:true};
+  const j = await res.json(); if(j.error) throw new Error(j.error); return j;
+}
+
+function initDate() {
+  const s = document.getElementById('monthPick');
+  const d = new Date();
+  for(let i=-3; i<=6; i++) {
+    const x = new Date(d.getFullYear(), d.getMonth()+i, 1);
+    const v = x.toISOString().slice(0,7);
+    const o = document.createElement('option');
+    o.value = v; o.text = x.toLocaleDateString('es-ES', {month:'long', year:'numeric'});
+    if(v === state.month) o.selected = true;
+    s.appendChild(o);
+  }
+  s.onchange = (e) => { state.month = e.target.value; loadHome(); };
+}
+
+function fillCats() {
+  const h = state.cats.map(c => `<option value="${c.raw}">${c.raw}</option>`).join('');
+  document.getElementById('txCat').innerHTML = h;
+  document.getElementById('recCat').innerHTML = h;
+}
+</script>
 </body>
 </html>
