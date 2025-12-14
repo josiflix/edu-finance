@@ -421,11 +421,39 @@ function closeDlgs() { document.querySelectorAll('.overlay').forEach(d => d.clas
 
 async function api(path, p={}, m='GET') {
   const url = new URL(API);
-  const q = { ...p, path, api_key: KEY, _t: Date.now() };
-  if(m==='GET') Object.keys(q).forEach(k => url.searchParams.append(k, q[k]));
-  const res = await fetch(url, { method: m, mode: m==='POST'?'no-cors':'cors', body: m==='POST'?JSON.stringify(q):null });
-  if(m==='POST') return {ok:true};
-  const j = await res.json(); if(j.error) throw new Error(j.error); return j;
+  
+  // Añadimos siempre la api_key y parámetros básicos a la URL
+  const queryParams = { path, api_key: KEY, _t: Date.now() };
+  Object.keys(queryParams).forEach(k => url.searchParams.append(k, queryParams[k]));
+
+  // Configuración del Fetch
+  const options = {
+    method: m,
+  };
+
+  if (m === 'POST') {
+    // TRUCO IMPORTANTE PARA GAS:
+    // Usamos text/plain para evitar el 'Preflight' de CORS (OPTIONS) que GAS no soporta bien.
+    // El backend (doPost) lo parseará igualmente.
+    options.body = JSON.stringify(p);
+    options.headers = { "Content-Type": "text/plain;charset=utf-8" };
+  } else {
+    // Para GET, añadimos los parámetros extra a la URL
+    Object.keys(p).forEach(k => url.searchParams.append(k, p[k]));
+  }
+
+  // Fetch con manejo de errores
+  const res = await fetch(url, options);
+  
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error("Error Red (" + res.status + "): " + txt);
+  }
+
+  const j = await res.json();
+  if (j.error || j.ok === false) throw new Error(j.error || "Error desconocido en servidor");
+  
+  return j;
 }
 
 function initDate() {
