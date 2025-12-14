@@ -421,6 +421,31 @@ function closeDlgs() { document.querySelectorAll('.overlay').forEach(d => d.clas
 
 async function api(path, p={}, m='GET') {
   const url = new URL(API);
+  const queryParams = { path, api_key: KEY, _t: Date.now() };
+  Object.keys(queryParams).forEach(k => url.searchParams.append(k, queryParams[k]));
+
+  const options = { method: m };
+
+  if (m === 'POST') {
+    options.body = JSON.stringify(p);
+    options.headers = { "Content-Type": "text/plain;charset=utf-8" };
+  } else {
+    Object.keys(p).forEach(k => url.searchParams.append(k, p[k]));
+  }
+
+  const res = await fetch(url, options);
+  const txt = await res.text(); // Leemos el texto crudo primero
+
+  try {
+    const j = JSON.parse(txt); // Intentamos convertir a JSON
+    if (j.error || j.ok === false) throw new Error(j.error || "Error en el servidor");
+    return j;
+  } catch (e) {
+    // Si falla el parseo, mostramos el texto que causó el error
+    console.error("Respuesta inválida:", txt);
+    throw new Error("El servidor no devolvió JSON válido. Respuesta: " + txt.substring(0, 50));
+  }
+}
   
   // Añadimos siempre la api_key y parámetros básicos a la URL
   const queryParams = { path, api_key: KEY, _t: Date.now() };
