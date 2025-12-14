@@ -2,9 +2,15 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
+  
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+
   <title>EduFinance Quartz</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -34,7 +40,9 @@
 
     <div class="section-title">Movimientos Recientes</div>
     <div id="txList" class="transaction-list">
-      <div style="padding:20px; text-align:center; color:#555;">Cargando...</div>
+      <div style="padding:40px; text-align:center; color:var(--text-sec); font-size:14px;">
+        Autenticando...
+      </div>
     </div>
   </main>
 
@@ -42,24 +50,31 @@
 
   <div id="addModal" class="modal-overlay" onclick="if(event.target===this) closeModal()">
     <div class="modal-sheet">
-      <h2 style="margin:0 0 20px 0; font-size:20px;">Nuevo Movimiento</h2>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 style="margin:0; font-size:20px; font-weight:700;">Nuevo</h2>
+        <button onclick="closeModal()" style="background:none; border:none; color:var(--primary); font-size:16px; font-weight:600;">Cancelar</button>
+      </div>
       
-      <div style="display:flex; gap:10px;">
-        <input type="number" id="inpAmount" placeholder="0.00 €" step="0.01" style="font-size:24px; font-weight:700;">
-        <select id="inpType" style="width:100px;">
-          <option value="Gasto">Gasto</option>
-          <option value="Ingreso">Ingreso</option>
-        </select>
+      <div style="display:flex; gap:12px;">
+        <div style="flex:2;">
+          <input type="number" id="inpAmount" placeholder="0.00" step="0.01" style="font-size:28px; font-weight:700; padding:12px;">
+        </div>
+        <div style="flex:1;">
+           <select id="inpType" style="height:100%;">
+            <option value="Gasto">Gasto</option>
+            <option value="Ingreso">Ingreso</option>
+          </select>
+        </div>
       </div>
 
-      <select id="inpCat">
+      <select id="inpCat" style="margin-top:12px;">
         <option value="" disabled selected>Categoría...</option>
       </select>
 
       <input type="text" id="inpNote" placeholder="Nota (opcional)">
       <input type="date" id="inpDate">
 
-      <button class="btn-primary" onclick="submitTx()">Guardar</button>
+      <button class="btn-primary" onclick="submitTx()">Guardar Movimiento</button>
     </div>
   </div>
 
