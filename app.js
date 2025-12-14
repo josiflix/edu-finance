@@ -1,239 +1,230 @@
-// === CONFIG ===
-// ⚠️ IMPORTANTE: Asegúrate de que esta URL es la de tu ÚLTIMA implementación (Versión Nueva)
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbxktnVK58sdnk9dQxTkl4lzwxwRYAQgk6RlMwj1M77Xjb3ZKHJiSF32Yk70oR8cmdFj/exec"; 
-const API_KEY  = "1234567890111213141516171819202122232425";
+// CONFIGURACIÓN (Actualiza ENDPOINT tras el deploy)
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbw7d0SQ2ZJo9zZS8Cp0N5rQk0pwKRxxQCrd-eOGNwjZuux9Pd4pdmw2e_6twRioXt1I/exec";
+const API_KEY = "1234567890111213141516171819202122232425";
 
-// === STATE ===
 let state = {
-  month: new Date().toISOString().slice(0, 7), // YYYY-MM
-  categories: []
+  month: new Date().toISOString().slice(0, 7),
+  categories: [],
+  movements: [] // Caché local para edición instantánea
 };
 
-// === INIT ===
 document.addEventListener("DOMContentLoaded", async () => {
-  setupMonthPicker();
+  initPicker();
   
-  // Set default date to today
-  const today = new Date().toISOString().slice(0,10);
-  document.getElementById("inpDate").value = today;
+  // Set hoy en el modal
+  document.getElementById("inpDate").value = new Date().toISOString().slice(0,10);
   
   try {
-    await loadCategories();
-    refresh();
+    // Carga inicial (Config + Datos)
+    const initRes = await api('/init');
+    state.categories = initRes.categories;
+    renderCatSelect();
+    
+    await loadData();
   } catch(e) {
-    document.getElementById("txList").innerHTML = 
-      `<div style="padding:20px; text-align:center; color:#ff453a;">${e.message}</div>`;
+    alert("Error de conexión: " + e.message);
   }
 });
 
-// === CORE FUNCTIONS ===
-
-async function refresh() {
-  const container = document.getElementById("txList");
-  // Don't wipe list if we already have one, just update opacity
-  if(container.children.length > 1) container.style.opacity = "0.5";
+async function loadData() {
+  document.body.style.cursor = "wait";
+  const data = await api('/data', { month: state.month });
+  state.movements = data.movements;
   
-  try {
-    // Parallel fetch for speed
-    const [summaryRes, movesRes] = await Promise.all([
-      fetchAPI("/summary", { month: state.month }),
-      fetchAPI("/movements", { month: state.month })
-    ]);
-    
-    renderHero(summaryRes.summary);
-    renderList(movesRes.movements);
-  } catch (e) {
-    console.error(e);
-    // Don't alert aggressively, show in UI
-  } finally {
-    container.style.opacity = "1";
-  }
+  renderHome(data.summary, data.movements);
+  renderAnalysis(data.summary);
+  document.body.style.cursor = "default";
 }
 
-async function submitTx() {
-  const amt = document.getElementById("inpAmount").value;
-  const cat = document.getElementById("inpCat").value;
+// --- ACTIONS ---
+
+function navTo(view) {
+  // Cambio de pestañas
+  document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
+  document.getElementById('view-' + view).classList.remove('hidden');
   
-  if(!amt) return alert("Introduce un importe.");
-  if(!cat) return alert("Selecciona una categoría.");
-
-  const btn = document.querySelector(".btn-primary");
-  const originalText = btn.innerText;
-  btn.innerText = "Guardando...";
-  btn.style.opacity = "0.7";
-  btn.disabled = true;
-
-  try {
-    const dateVal = document.getElementById("inpDate").value;
-    const payload = {
-      path: "/add",
-      amount: amt,
-      type: document.getElementById("inpType").value,
-      raw_category: cat,
-      note: document.getElementById("inpNote").value,
-      date: dateVal,
-      accounting_month: calcAccountingMonth(dateVal)
-    };
-    
-    // Using no-cors for speed and to avoid preflight checks
-    await fetch(ENDPOINT, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ ...payload, api_key: API_KEY }),
-    });
-
-    // Artificial delay to allow Sheets to process (since we can't await no-cors response)
-    await new Promise(r => setTimeout(r, 1500)); 
-    
-    closeModal();
-    
-    // Reset form
-    document.getElementById("inpAmount").value = "";
-    document.getElementById("inpNote").value = "";
-    
-    refresh();
-
-  } catch(e) {
-    alert("Error guardando: " + e.message);
-  } finally {
-    btn.innerText = originalText;
-    btn.style.opacity = "1";
-    btn.disabled = false;
-  }
+  // Estado de botones
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const idx = view === 'home' ? 0 : 1;
+  document.querySelectorAll('.nav-item')[idx].classList.add('active');
 }
 
-async function loadCategories() {
-  const res = await fetchAPI("/categories");
-  // Handle both {ok:true, categories:[]} and just {categories:[]}
-  const cats = res.categories || (res.data ? res.data.categories : []) || [];
+function openModal(id = null) {
+  const modal = document.getElementById('dialog');
+  const title = document.getElementById('modalTitle');
+  const btnDel = document.getElementById('btnDel');
   
-  state.categories = cats;
-  const sel = document.getElementById("inpCat");
+  if (id) {
+    // Modo Edición
+    const m = state.movements.find(x => x.id === id);
+    if (!m) return;
+    title.innerText = "Editar";
+    document.getElementById('inpId').value = id;
+    document.getElementById('inpAmt').value = m.amount;
+    document.getElementById('inpType').value = m.type;
+    document.getElementById('inpCat').value = m.raw_category;
+    document.getElementById('inpNote').value = m.note;
+    document.getElementById('inpDate').value = m.date;
+    btnDel.style.display = 'block';
+  } else {
+    // Modo Nuevo
+    title.innerText = "Nuevo Movimiento";
+    document.getElementById('inpId').value = "";
+    document.getElementById('inpAmt').value = "";
+    document.getElementById('inpNote').value = "";
+    btnDel.style.display = 'none';
+  }
   
-  if (cats.length === 0) {
-    sel.innerHTML = `<option>Error: Sin categorías</option>`;
+  modal.classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('dialog').classList.remove('open');
+}
+
+async function save() {
+  const id = document.getElementById('inpId').value;
+  const payload = {
+    id: id || null,
+    amount: document.getElementById('inpAmt').value,
+    type: document.getElementById('inpType').value,
+    raw_category: document.getElementById('inpCat').value,
+    note: document.getElementById('inpNote').value,
+    date: document.getElementById('inpDate').value,
+    accounting_month: calcMonth(document.getElementById('inpDate').value)
+  };
+  
+  if (!payload.amount) return alert("Falta el importe");
+
+  // UX Optimista: Cerrar modal inmediatamente
+  closeModal();
+  
+  const path = id ? '/update' : '/add';
+  await api(path, payload, 'POST');
+  
+  // Recargar datos para confirmar
+  await loadData();
+}
+
+async function del() {
+  if(!confirm("¿Borrar?")) return;
+  const id = document.getElementById('inpId').value;
+  closeModal();
+  await api('/delete', { id }, 'POST');
+  await loadData();
+}
+
+// --- RENDERING ---
+
+function renderHome(sum, list) {
+  const fmt = n => Number(n).toLocaleString('es-ES', {style:'currency', currency:'EUR'});
+  
+  document.getElementById('txtNet').innerText = fmt(sum.forecast);
+  document.getElementById('txtIn').innerText = fmt(sum.income);
+  document.getElementById('txtOut').innerText = fmt(sum.expense);
+  
+  const listEl = document.getElementById('listTx');
+  if (list.length === 0) {
+    listEl.innerHTML = "<div style='padding:20px; text-align:center; opacity:0.5'>Sin movimientos</div>";
     return;
   }
-
-  // Sort alphabetically
-  cats.sort((a,b) => a.raw.localeCompare(b.raw));
-  sel.innerHTML = `<option value="" disabled selected>Categoría...</option>` + 
-    cats.map(c => `<option value="${c.raw}">${c.raw}</option>`).join("");
+  
+  listEl.innerHTML = list.map(m => {
+    const isInc = m.type === 'Ingreso';
+    const color = isInc ? 'var(--md-sys-color-tertiary)' : 'var(--md-sys-color-on-surface)';
+    const icon = isInc ? 'arrow_downward' : 'arrow_upward';
+    
+    return `
+    <div class="transaction-item" onclick="openModal('${m.id}')">
+      <div style="display:flex; align-items:center;">
+        <div class="tx-icon"><span class="material-symbols-rounded">${icon}</span></div>
+        <div>
+          <div style="font-weight:500;">${m.raw_category}</div>
+          <div style="font-size:12px; opacity:0.7;">${m.note || m.date.slice(8)}</div>
+        </div>
+      </div>
+      <div style="font-weight:600; font-size:16px; color:${color}">
+        ${isInc ? '+' : ''}${fmt(m.amount)}
+      </div>
+    </div>`;
+  }).join('');
 }
 
-// === API ENGINE (FIXED) ===
+function renderAnalysis(sum) {
+  const fmt = n => Number(n).toLocaleString('es-ES', {style:'currency', currency:'EUR'});
+  
+  // Objetivo
+  document.getElementById('txtGoalPercent').innerText = Math.round(sum.goal_percent) + "%";
+  document.getElementById('barGoal').style.width = sum.goal_percent + "%";
+  document.getElementById('txtGoalDetail').innerText = `Proyectado: ${fmt(sum.forecast)} / Meta: ${fmt(sum.goal_base)}`;
+  
+  // Categorías
+  const listEl = document.getElementById('listCats');
+  const cats = sum.analysis || [];
+  
+  if (cats.length === 0) {
+    listEl.innerHTML = "<div style='padding:20px; opacity:0.5'>Sin datos</div>";
+    return;
+  }
+  
+  const max = Math.max(...cats.map(c => c.value));
+  
+  listEl.innerHTML = cats.map(c => `
+    <div class="card" style="padding:16px; margin-bottom:8px;">
+      <div class="bar-header"><span>${c.name}</span><span>${fmt(c.value)}</span></div>
+      <div class="track">
+        <div class="fill" style="width:${(c.value/max)*100}%; background:var(--md-sys-color-secondary);"></div>
+      </div>
+    </div>
+  `).join('');
+}
 
-async function fetchAPI(path, params = {}) {
+function renderCatSelect() {
+  const el = document.getElementById('inpCat');
+  el.innerHTML = state.categories
+    .sort((a,b) => a.raw.localeCompare(b.raw))
+    .map(c => `<option value="${c.raw}">${c.raw}</option>`).join('');
+}
+
+// --- UTILS ---
+
+async function api(path, params={}, method='GET') {
   const url = new URL(ENDPOINT);
   const q = { ...params, path, api_key: API_KEY, _t: Date.now() };
   Object.keys(q).forEach(k => url.searchParams.append(k, q[k]));
   
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Server Error: ${res.status}`);
+  const opts = { method };
+  if (method === 'POST') opts.mode = 'no-cors';
   
-  const data = await res.json();
+  const res = await fetch(url, opts);
+  if (method === 'POST') return { ok: true };
   
-  // FIX: Solo lanzamos error si la API explícitamente nos dice "error"
-  if (data.error) throw new Error(data.error);
-  
-  return data;
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json;
 }
 
-// === LOGIC UTILS ===
-
-function calcAccountingMonth(dateStr) {
-  if (!dateStr) return state.month;
-  const d = new Date(dateStr);
-  const day = d.getDate();
-  // Regla de negocio: Si es día >= 10, pasa al mes siguiente
-  if (day >= 10) {
-    d.setMonth(d.getMonth() + 1);
-  }
+function calcMonth(dStr) {
+  const d = new Date(dStr);
+  if (d.getDate() >= 10) d.setMonth(d.getMonth() + 1);
   return d.toISOString().slice(0, 7);
 }
 
-function fmtMoney(n) {
-  return Number(n).toLocaleString("es-ES", { 
-    style: "currency", 
-    currency: "EUR",
-    minimumFractionDigits: 2 
-  });
-}
-
-// === UI HELPERS ===
-
-function renderHero(summary) {
-  if (!summary) return;
-  document.getElementById("lblIn").innerText = fmtMoney(summary.income);
-  document.getElementById("lblOut").innerText = fmtMoney(summary.expense);
-  
-  const netEl = document.getElementById("lblNet");
-  netEl.innerText = fmtMoney(summary.forecast);
-  netEl.style.color = summary.forecast >= 0 ? "var(--text-main)" : "var(--danger)";
-}
-
-function renderList(list) {
-  const box = document.getElementById("txList");
-  if (!list || list.length === 0) {
-    box.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-sec);">No hay movimientos en ${state.month}</div>`;
-    return;
-  }
-
-  box.innerHTML = list.map(m => {
-    const isIngreso = m.type === "Ingreso";
-    const amountClass = isIngreso ? "text-green" : "";
-    const sign = isIngreso ? "+" : "";
-    
-    // Parse date for display (YYYY-MM-DD -> DD/MM)
-    const day = m.date.slice(8,10);
-    
-    return `
-    <div class="row">
-      <div class="row-left">
-        <div class="row-cat">${m.raw_category}</div>
-        <div class="row-note">${m.note || "Sin nota"}</div>
-      </div>
-      <div class="row-right">
-        <div class="row-amount ${amountClass}">${sign}${fmtMoney(m.amount)}</div>
-        <div class="row-date">Día ${day}</div>
-      </div>
-    </div>`;
-  }).join("");
-}
-
-function setupMonthPicker() {
-  const sel = document.getElementById("monthPicker");
+function initPicker() {
+  const sel = document.getElementById('monthSelector');
   const now = new Date();
-  
-  // Limpiamos y generamos rango: -5 meses a +6 meses
-  sel.innerHTML = "";
-  
-  for (let i = -5; i <= 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const val = d.toISOString().slice(0, 7); // YYYY-MM
-    
-    // Formato bonito: "ene. 2026"
-    const label = d.toLocaleDateString("es-ES", { month: "short", year: "numeric" });
-    
-    const opt = document.createElement("option");
+  for(let i=-2; i<=4; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth()+i, 1);
+    const val = d.toISOString().slice(0,7);
+    const opt = document.createElement('option');
     opt.value = val;
-    opt.text = label.charAt(0).toUpperCase() + label.slice(1); // Capitalize
-    
-    if (val === state.month) opt.selected = true;
+    const name = d.toLocaleDateString('es-ES', {month:'long', year:'numeric'});
+    opt.text = name.charAt(0).toUpperCase() + name.slice(1);
+    if(val === state.month) opt.selected = true;
     sel.appendChild(opt);
   }
-  
-  sel.addEventListener("change", (e) => {
+  sel.addEventListener('change', e => {
     state.month = e.target.value;
-    refresh();
+    loadData();
   });
-}
-
-function openModal() { 
-  document.getElementById("addModal").classList.add("open");
-  document.getElementById("inpAmount").focus();
-}
-function closeModal() { 
-  document.getElementById("addModal").classList.remove("open"); 
 }
