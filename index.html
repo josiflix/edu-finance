@@ -2,79 +2,100 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#000000">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>EduFinance MD3</title>
   
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-
-  <title>EduFinance Quartz</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+  
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <nav class="nav-bar">
-    <div class="brand">EduFinance</div>
-    <select id="monthPicker" class="month-selector"></select>
+  <nav class="navigation-bar">
+    <button class="nav-item active" onclick="navTo('home')">
+      <div class="nav-icon-container">
+        <span class="material-symbols-rounded">account_balance_wallet</span>
+      </div>
+      <span class="nav-label">Resumen</span>
+    </button>
+    <button class="nav-item" onclick="navTo('analysis')">
+      <div class="nav-icon-container">
+        <span class="material-symbols-rounded">monitoring</span>
+      </div>
+      <span class="nav-label">Análisis</span>
+    </button>
   </nav>
 
   <main>
-    <div class="hero-card">
-      <div class="hero-label">Disponible Estimado</div>
-      <div class="hero-balance" id="lblNet">--</div>
-      
-      <div class="hero-meta">
-        <div class="meta-item">
-          <div>Ingresos</div>
-          <div class="text-green" id="lblIn">--</div>
-        </div>
-        <div class="meta-item">
-          <div>Gastos</div>
-          <div class="text-red" id="lblOut">--</div>
-        </div>
-      </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+      <span style="font-size:22px;">EduFinance</span>
+      <select id="monthSelector" class="text-field" style="width:auto; margin:0; padding:8px 16px; border-radius:20px;"></select>
     </div>
 
-    <div class="section-title">Movimientos Recientes</div>
-    <div id="txList" class="transaction-list">
-      <div style="padding:40px; text-align:center; color:var(--text-sec); font-size:14px;">
-        Autenticando...
+    <div id="view-home">
+      <div class="card">
+        <div class="card-title">Disponible Estimado</div>
+        <div class="display-large" id="txtNet">...</div>
+        <div style="display:flex; gap:24px; margin-top:24px;">
+          <div>
+            <div class="card-title" style="margin:0">Ingresos</div>
+            <div style="font-size:18px; color:var(--md-sys-color-tertiary);" id="txtIn">...</div>
+          </div>
+          <div>
+            <div class="card-title" style="margin:0">Gastos</div>
+            <div style="font-size:18px; color:var(--md-sys-color-error);" id="txtOut">...</div>
+          </div>
+        </div>
       </div>
+
+      <div class="card-title" style="margin-left:8px;">Últimos Movimientos</div>
+      <div id="listTx"></div>
+      <div style="height:100px"></div>
+    </div>
+
+    <div id="view-analysis" class="hidden">
+      <div class="card">
+        <div class="card-title">Progreso Objetivo</div>
+        <div class="display-large" id="txtGoalPercent">0%</div>
+        <div class="bar-container" style="margin-top:16px;">
+          <div class="track"><div id="barGoal" class="fill" style="width:0%"></div></div>
+        </div>
+        <div class="card-title" id="txtGoalDetail">Meta: --</div>
+      </div>
+
+      <div class="card-title" style="margin-left:8px;">Gastos por Categoría</div>
+      <div id="listCats"></div>
+      <div style="height:100px"></div>
     </div>
   </main>
 
-  <button class="fab" onclick="openModal()">+</button>
+  <button class="fab" onclick="openModal()">
+    <span class="material-symbols-rounded">add</span>
+  </button>
 
-  <div id="addModal" class="modal-overlay" onclick="if(event.target===this) closeModal()">
-    <div class="modal-sheet">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <h2 style="margin:0; font-size:20px; font-weight:700;">Nuevo</h2>
-        <button onclick="closeModal()" style="background:none; border:none; color:var(--primary); font-size:16px; font-weight:600;">Cancelar</button>
-      </div>
+  <div id="dialog" class="dialog-overlay" onclick="if(event.target===this) closeModal()">
+    <div class="dialog">
+      <h2 style="margin:0 0 24px 0;" id="modalTitle">Nuevo Movimiento</h2>
+      <input type="hidden" id="inpId">
       
-      <div style="display:flex; gap:12px;">
-        <div style="flex:2;">
-          <input type="number" id="inpAmount" placeholder="0.00" step="0.01" style="font-size:28px; font-weight:700; padding:12px;">
-        </div>
-        <div style="flex:1;">
-           <select id="inpType" style="height:100%;">
-            <option value="Gasto">Gasto</option>
-            <option value="Ingreso">Ingreso</option>
-          </select>
-        </div>
+      <div style="display:flex; gap:16px;">
+        <input type="number" id="inpAmt" class="text-field" placeholder="0.00" style="font-size:24px;">
+        <select id="inpType" class="text-field" style="width:120px;">
+          <option>Gasto</option>
+          <option>Ingreso</option>
+        </select>
       </div>
 
-      <select id="inpCat" style="margin-top:12px;">
-        <option value="" disabled selected>Categoría...</option>
-      </select>
+      <select id="inpCat" class="text-field"><option>Cargando...</option></select>
+      <input type="text" id="inpNote" class="text-field" placeholder="Nota">
+      <input type="date" id="inpDate" class="text-field">
 
-      <input type="text" id="inpNote" placeholder="Nota (opcional)">
-      <input type="date" id="inpDate">
-
-      <button class="btn-primary" onclick="submitTx()">Guardar Movimiento</button>
+      <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+        <button class="btn btn-filled" onclick="save()">Guardar</button>
+        <button class="btn btn-tonal" id="btnDel" onclick="del()" style="display:none; background:var(--md-sys-color-error); color:black;">Eliminar</button>
+        <button class="btn btn-text" onclick="closeModal()">Cancelar</button>
+      </div>
     </div>
   </div>
 
