@@ -124,7 +124,11 @@
 
     <div id="view-stats" class="hidden">
       <div class="top-bar">
-        <span style="font-size:22px">Resumen Anual 2026</span>
+        <span style="font-size:22px">Resumen Anual</span>
+        <select id="yearStats" onchange="loadStats()" style="width:auto; margin:0; border-radius:20px">
+          <option value="2025" selected>2025</option>
+          <option value="2026">2026</option>
+        </select>
       </div>
       <div id="statsList">
         <div style="text-align:center; padding:20px; opacity:0.7">Cargando datos...</div>
@@ -217,7 +221,8 @@
 </div>
 
 <script>
-// --- LOGIC ---
+// --- CONFIGURACIÓN ---
+// ¡¡ PEGA TU URL AQUÍ DE NUEVO !!
 const API = "https://script.google.com/macros/s/AKfycbyXkMFiowWJAuyKszQrOucNxLVPyTDqUObNCSGEaXIdu8Lmz9uJppnMjgQac8ca1OYb/exec";
 const KEY = "1234567890111213141516171819202122232425";
 
@@ -231,7 +236,7 @@ window.onload = async () => {
     state.cats = res.categories;
     state.recs = res.recurring;
     fillCats();
-    await loadHome(); // Await aquí para asegurar carga ordenada
+    await loadHome(); 
     renderRecList();
   } catch(e) { console.error(e); alert("Error Init: " + e.message); }
 };
@@ -261,7 +266,7 @@ async function saveTx() {
   if(!p.amount) return alert("Falta importe");
   closeDlgs();
   await api(p.id ? '/update' : '/add', p, 'POST');
-  await loadHome(); // Usar loadHome para refrescar
+  await loadHome(); 
 }
 
 async function delTx() {
@@ -329,13 +334,15 @@ async function autofillMonth() {
   await loadHome();
 }
 
-// --- NUEVA LÓGICA: ESTADÍSTICAS ANUALES ---
+// --- NUEVA LÓGICA: ESTADÍSTICAS CON SELECTOR ---
 async function loadStats() {
+  // Cogemos el año del selector (por defecto 2025 o 2026)
+  const year = document.getElementById('yearStats').value;
+  
   const container = document.getElementById('statsList');
-  container.innerHTML = "<div style='text-align:center; padding:20px; opacity:0.7'>Cargando...</div>";
+  container.innerHTML = "<div style='text-align:center; padding:20px; opacity:0.7'>Cargando datos de " + year + "...</div>";
   try {
-    // Pedimos datos de 2026 forzados
-    const res = await api('/stats', { year: '2026' }); 
+    const res = await api('/stats', { year: year }); 
     const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     
     let html = "";
@@ -460,18 +467,17 @@ function openRecModal(id) {
 function nav(v) {
   document.getElementById('view-home').classList.add('hidden');
   document.getElementById('view-conf').classList.add('hidden');
-  document.getElementById('view-stats').classList.add('hidden'); // Ocultar stats
+  document.getElementById('view-stats').classList.add('hidden'); 
   
   document.getElementById('view-'+v).classList.remove('hidden');
   
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   event.currentTarget.classList.add('active');
   
-  // Gestión del botón flotante
   if (v === 'home') document.getElementById('fabMain').style.display = 'flex';
   else document.getElementById('fabMain').style.display = 'none';
 
-  // Si vamos a stats, cargar datos
+  // Al navegar a stats, cargamos con el año seleccionado actualmente
   if (v === 'stats') loadStats();
 }
 
