@@ -145,7 +145,10 @@
       <input type="number" id="txAmt" placeholder="0.00" style="font-size:24px">
       <select id="txType" style="width:120px"><option>Gasto</option><option>Ingreso</option></select>
     </div>
-    <select id="txCat"><option>Cargando...</option></select>
+    
+    <input type="text" id="txCat" list="catList" placeholder="Categoría (Escribe o selecciona)" autocomplete="off">
+    <datalist id="catList"></datalist>
+
     <input type="text" id="txNote" placeholder="Concepto">
     <input type="date" id="txDate">
     
@@ -171,7 +174,7 @@
     </div>
     
     <label>Categoría</label>
-    <select id="recCat"></select>
+    <input type="text" id="recCat" list="catList" placeholder="Categoría" autocomplete="off">
 
     <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:10px">
       <label style="display:flex; align-items:center; gap:10px;">
@@ -197,7 +200,7 @@
 
 <script>
 // --- LOGIC ---
-const API = "https://script.google.com/macros/s/AKfycbwJKgPyDOC3qv6welmZs6xYw-ZydP_syJju5dJprp8yOdCyiMiHyzjcd8EKbwBePKdH/exec"; 
+const API = "https://script.google.com/macros/s/AKfycbwnnypRHxdQnnomobMlsr5ZlfP4om_U3KUMbZzhKCnHSmPTH28PgZ9o-7qUy5Y-efnw/exec";
 const KEY = "1234567890111213141516171819202122232425";
 
 let state = { month: new Date().toISOString().slice(0,7), cats: [], movs: [], recs: [] };
@@ -303,8 +306,14 @@ async function delRec() {
 async function autofillMonth() {
   if(!confirm("¿Generar gastos fijos y amortizaciones para " + state.month + "?")) return;
   document.body.style.cursor = "wait";
-  const res = await api('/generate_month', { month: state.month }, 'POST');
-  alert("Generados: " + (res.count || 0));
+  
+  try {
+    const res = await api('/generate_month', { month: state.month }, 'POST');
+    alert("Generados: " + (res.count || 0) + "\n\n" + (res.msg || ""));
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+  
   document.body.style.cursor = "default";
   loadHome();
 }
@@ -361,6 +370,7 @@ function openTxModal(id) {
   } else {
     document.getElementById('txId').value = "";
     document.getElementById('txAmt').value = "";
+    document.getElementById('txCat').value = "";
     document.getElementById('btnDelTx').style.display = 'none';
     document.getElementById('txDate').value = new Date().toISOString().slice(0,10);
   }
@@ -388,6 +398,7 @@ function openRecModal(id) {
     } else {
       document.getElementById('recTitle').value = "";
       document.getElementById('recAmt').value = "";
+      document.getElementById('recCat').value = "";
     }
     document.getElementById('recIsInst').checked = false;
     toggleInst(false);
@@ -432,9 +443,15 @@ function initDate() {
 }
 
 function fillCats() {
-  const h = state.cats.map(c => `<option value="${c.raw}">${c.raw}</option>`).join('');
-  document.getElementById('txCat').innerHTML = h;
-  document.getElementById('recCat').innerHTML = h;
+  // Ordenamos alfabéticamente
+  state.cats.sort((a,b) => a.raw.localeCompare(b.raw));
+  
+  // Creamos las opciones para el datalist
+  const options = state.cats.map(c => `<option value="${c.raw}">`).join('');
+  
+  // Inyectamos en el datalist
+  const dataList = document.getElementById('catList');
+  if (dataList) dataList.innerHTML = options;
 }
 </script>
 </body>
